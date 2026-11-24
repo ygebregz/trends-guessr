@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A daily geography game: guess the country from what it's searching on Google today.">
+<meta property="og:title" content="Trends Guessr">
+<meta property="og:description" content="A daily geography game: guess the country from what it's searching on Google today.">
+<meta property="og:url" content="https://ygebregz.github.io/trends-guessr/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'%3E%3Ccircle cx='11' cy='11' r='8' fill='none' stroke='%2316181d' stroke-width='2.6'/%3E%3Cpath d='M17 17l6.5 6.5' stroke='%2316181d' stroke-width='2.8' stroke-linecap='round'/%3E%3Cpath d='M6.6 13.4l2.8-3 2.2 2 3-4' fill='none' stroke='%23e5484d' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<title>Trends Guessr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,600&display=swap">
+<style>
+/* Layout: a newsy daily feed. Left-aligned, one 520px column: answer recap (when solved),
+   guesses as closeness bars, the clue feed, then a quiet map. Guess box pinned to the bottom. */
+:root {
+  --bg: #ffffff;
+  --ink: #16181d;
+  --muted: #6b7079;
+  --line: #e3e5e8;
+  --soft: #f3f4f6;
+  --land: #c5c9cf;
+  --land-off: #e8eaed;
+  --found: #1f8a5b;
+  --hot: #e0663a;
+  --warm: #d9a21b;
+  --cold: #6f98c4;
+  --live: #e5484d;
+  --btn: #16181d;
+  --btn-ink: #ffffff;
+  --ui: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --news: "Newsreader", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111214; --ink: #f2f3f5; --muted: #9a9fa8; --line: #2a2c31; --soft: #1b1c20;
+    --land: #575b63; --land-off: #2a2c31; --found: #3fb27f; --hot: #e5784f; --warm: #d8a93a; --cold: #5d86b3;
+    --btn: #f2f3f5; --btn-ink: #111214;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111214; --ink: #f2f3f5; --muted: #9a9fa8; --line: #2a2c31; --soft: #1b1c20;
+  --land: #575b63; --land-off: #2a2c31; --found: #3fb27f; --hot: #e5784f; --warm: #d8a93a; --cold: #5d86b3;
+  --btn: #f2f3f5; --btn-ink: #111214;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { background: var(--bg); }
+body { margin: 0; color: var(--ink); font: 16px/1.42 var(--ui); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* header */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9; background: var(--bg); border-bottom: 1px solid var(--line); }
+.hbar { max-width: 520px; margin: 0 auto; height: 54px; display: flex; align-items: center; justify-content: space-between; }
+.mark { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 19px; letter-spacing: -0.02em; }
+.mark svg { width: 26px; height: 26px; }
+.icons { display: flex; gap: 2px; }
+.ib { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 8px; color: var(--ink); }
+.ib:hover { background: var(--soft); }
+.ib svg { width: 21px; height: 21px; }
+
+/* ads: fixed-size reserved boxes so nothing jumps when an ad fills */
+.ad { margin: 0 auto; display: grid; place-items: center; background: var(--soft); color: var(--muted); font-size: 11px; }
+.ad-top { width: 320px; max-width: 100%; height: 50px; margin-top: 12px; }
+.ad-rect { width: 300px; max-width: 100%; height: 250px; margin-top: 18px; }
+
+main { max-width: 520px; margin: 0 auto; padding-top: 16px; padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+.dateline { color: var(--muted); font-size: 13px; margin: 0; }
+.prompt { font-size: 24px; line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 4px; text-wrap: balance; }
+.lede { color: var(--muted); font-size: 14px; margin: 0 0 6px; }
+.live { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--live); margin: 0 6px 0 1px; vertical-align: 1px; animation: pulse 2s ease-out infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgb(229 72 77 / .45); } 100% { box-shadow: 0 0 0 7px rgb(229 72 77 / 0); } }
+
+/* section titles: plain sentence case */
+.sect { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 22px 0 0; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-size: 17px; font-weight: 700; }
+.sect span { color: var(--muted); font-weight: 400; font-size: 13px; }
+
+/* clue feed */
+ol.list { list-style: none; margin: 0; padding: 0; }
+.item { display: grid; grid-template-columns: 24px 1fr; gap: 0 6px; padding: 11px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.item .num { color: var(--muted); font-size: 13px; padding-top: 3px; font-variant-numeric: tabular-nums; }
+.item .t { font-size: 17px; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.item .sub { grid-column: 2; color: var(--muted); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+.item.fresh { animation: fresh 1.6s ease-out; }
+@keyframes fresh { 0% { background: color-mix(in srgb, var(--warm) 22%, transparent); } 100% { background: transparent; } }
+.item.fresh .t { animation: type .8s steps(28, end); }
+@keyframes type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.item.lock .sub { font-size: 13px; }
+.redact { display: inline-block; background: var(--ink); color: var(--bg); font-size: 11px; font-weight: 600; padding: 0 6px 1px; border-radius: 3px; vertical-align: 1px; }
+.item.song { grid-template-columns: 24px 48px 1fr; align-items: center; gap: 0 10px; }
+.item.song .num { padding: 0; }
+.item.song .txt { min-width: 0; }
+.item.song .t { display: block; font-size: 16px; }
+.item.song .sub { display: block; margin: 1px 0 0; }
+.cover { width: 48px; height: 48px; border-radius: 4px; overflow: hidden; background: var(--soft); flex: none; }
+.cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.teaser { display: flex; align-items: center; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.teaser .cover { width: 40px; height: 40px; }
+.teaser .cover img { filter: blur(6px) saturate(1.3); transform: scale(1.25); }
+.teaser .msg { font-size: 13px; color: var(--muted); margin-left: 6px; line-height: 1.3; }
+.news { display: grid; grid-template-columns: 1fr 92px; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.news .src { font-size: 13px; color: var(--muted); }
+.news .h { font: 600 20px/1.22 var(--news); margin-top: 3px; overflow-wrap: anywhere; }
+.news .ph { width: 92px; height: 92px; border-radius: 4px; overflow: hidden; background: var(--soft); }
+.news .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.news.lock .ph img { filter: blur(9px) saturate(1.2); transform: scale(1.25); }
+.news.lock .bar { display: block; height: 11px; border-radius: 2px; background: var(--soft); margin-top: 8px; }
+.news.lock .bar.short { width: 60%; }
+.news.fresh { animation: fresh 1.6s ease-out; }
+
+/* guesses as closeness bars */
+.guesses { list-style: none; margin: 0; padding: 0; }
+.guess { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.gtop { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.gname { font-weight: 700; font-size: 16px; }
+.gkm { color: var(--muted); font-size: 14px; white-space: nowrap; }
+.gkm b { color: var(--ink); font-size: 16px; margin-left: 4px; }
+.gbar { height: 6px; background: var(--soft); border-radius: 3px; margin-top: 7px; overflow: hidden; }
+.gbar i { display: block; height: 100%; border-radius: 3px; transform-origin: left; }
+.guess.new .gbar i { animation: grow .7s cubic-bezier(.2,.8,.2,1); }
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* answer recap */
+.reveal { padding: 4px 0 6px; }
+.reveal .kicker { color: var(--muted); font-size: 13px; margin: 0; }
+.reveal h2 { margin: 2px 0 2px; font-size: 34px; line-height: 1.05; font-weight: 800; letter-spacing: -0.03em; }
+.reveal .verdict { margin: 0; font-size: 16px; }
+.strip { display: flex; gap: 4px; margin: 14px 0 4px; overflow: hidden; border-radius: 6px; }
+.strip span { flex: 1 1 0; aspect-ratio: 1; min-width: 0; background: var(--soft); }
+.strip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.strip-cap { font-size: 13px; color: var(--muted); margin: 0; }
+.trail { margin-top: 16px; }
+.trail svg { display: block; width: 100%; height: auto; overflow: visible; }
+.trail text { font: 500 11px var(--ui); fill: var(--muted); font-variant-numeric: tabular-nums; }
+.trail .ln { fill: none; stroke: var(--line); stroke-width: 2; }
+.trail-cap { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.actions { display: flex; gap: 8px; margin: 16px 0 0; flex-wrap: wrap; }
+.btn { height: 46px; padding: 0 18px; border-radius: 10px; background: var(--btn); color: var(--btn-ink); font-weight: 700; font-size: 15px; }
+.btn.plain { background: var(--soft); color: var(--ink); }
+.history { margin-top: 18px; }
+.history p { margin: 0 0 8px; font-size: 14px; }
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.week div { text-align: center; font-size: 11px; color: var(--muted); }
+.week b { display: grid; place-items: center; height: 34px; margin-top: 3px; border-radius: 6px; background: var(--soft); color: var(--muted); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.week b.won { background: var(--found); color: #fff; }
+.week b.lost { background: var(--ink); color: var(--bg); }
+.week b.today { outline: 2px solid var(--ink); outline-offset: 1px; }
+textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, monospace; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); color: var(--ink); }
+
+/* map */
+.map { margin-top: 24px; background: var(--soft); border-radius: 6px; overflow: hidden; position: relative; }
+.map svg { display: block; width: 100%; height: auto; touch-action: manipulation; }
+.map path { fill: var(--land-off); stroke: var(--bg); stroke-width: .6; }
+.map path.play { fill: var(--land); cursor: pointer; }
+.map path.play:hover { fill: var(--muted); }
+.map path.pick { stroke: var(--ink); stroke-width: 2; }
+.map path.answer { fill: var(--found); }
+.map .cap { position: absolute; left: 10px; bottom: 7px; font-size: 12px; color: var(--muted); pointer-events: none; }
+.note { color: var(--muted); font-size: 12px; margin: 14px 0 0; }
+
+/* bottom guess box */
+.dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; background: var(--bg); border-top: 1px solid var(--line); padding-top: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+.dock form { max-width: 520px; margin: 0 auto; display: flex; gap: 8px; position: relative; }
+.dock input { flex: 1; min-width: 0; height: 46px; padding: 0 14px; font: 500 16px var(--ui); color: var(--ink); background: var(--soft); border: 1px solid transparent; border-radius: 10px; }
+.dock input:focus { border-color: var(--ink); background: var(--bg); outline: none; }
+.suggest { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 -8px 24px rgb(0 0 0 / .1); list-style: none; margin: 0; padding: 4px; max-height: 50vh; overflow-y: auto; }
+.suggest li { padding: 10px 12px; border-radius: 7px; font-weight: 600; cursor: pointer; }
+.suggest li[aria-selected="true"] { background: var(--soft); }
+.shake { animation: shake .35s; }
+@keyframes shake { 25%, 75% { transform: translateX(-4px); } 50% { transform: translateX(4px); } }
+
+.toast { position: fixed; top: calc(66px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 40; background: var(--ink); color: var(--bg); font-weight: 600; font-size: 14px; padding: 10px 14px; border-radius: 8px; max-width: calc(100% - 32px); text-align: center; }
+
+/* sheets (help, history) */
+.scrim { position: fixed; inset: 0; z-index: 30; background: rgb(0 0 0 / .35); display: flex; align-items: flex-end; justify-content: center; }
+.sheet { position: relative; width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; background: var(--bg); border-radius: 14px 14px 0 0; padding: 20px max(18px, env(safe-area-inset-right, 0px)) calc(22px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px)); }
+.sheet .x { position: absolute; top: 10px; right: 10px; }
+.sheet h2 { margin: 0 0 8px; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.sheet p, .sheet li { font-size: 15px; }
+.sheet ol { padding-left: 20px; margin: 8px 0; }
+.sheet .ex { margin: 10px 0; }
+@media (min-width: 640px) { .scrim { align-items: center; } .sheet { border-radius: 14px; } }
+@media (prefers-reduced-motion: reduce) { .live, .item.fresh, .item.fresh .t, .guess.new .gbar i, .news.fresh { animation: none; } }
+</style>
+
+<style>img { max-width: 100%; }</style>
+</head>
+<body>
+<header class="gutter">
+  <div class="hbar">
+    <div class="mark">
+      <svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M17 17l6.5 6.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M6.6 13.4l2.8-3 2.2 2 3-4" fill="none" stroke="#e5484d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      trends guessr
+    </div>
+    <div class="icons">
+      <button class="ib" id="b-practice" aria-label="Play another country"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
+      <button class="ib" id="b-stats" aria-label="Your history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>
+      <button class="ib" id="b-help" aria-label="How to play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><circle cx="12" cy="17.2" r=".6" fill="currentColor"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<div class="gutter">
+  <!-- AD SLOT: top banner 320x50. Replace the inner text with your ad tag (e.g. an AdSense <ins> unit). -->
+  <div class="ad ad-top" data-ad-slot="top-banner" aria-label="Advertisement">Advertisement</div>
+
+  <main>
+    <section class="reveal" id="reveal" hidden></section>
+    <div id="ask">
+      <p class="dateline" id="dateline">&nbsp;</p>
+      <h1 class="prompt">Which country searched for all this today?</h1>
+      <p class="lede">Clues are translated to English and its place names are blacked out.</p>
+    </div>
+    <div id="guess-wrap" hidden>
+      <h3 class="sect" id="guess-h">Your guesses</h3>
+      <ol class="guesses" id="guesses"></ol>
+    </div>
+    <section id="clues" aria-live="polite"></section>
+    <div class="map" id="mapbox">
+      <svg id="map" viewBox="0 0 960 470" role="img" aria-label="World map. Tap a country to pick it."></svg>
+      <span class="cap" id="mapcap">Tap a dark gray country to pick it</span>
+    </div>
+    <p class="note">Searches from Google Trends and songs from Apple Music. 42 countries are in play.</p>
+  </main>
+</div>
+
+<div class="dock gutter" id="dock">
+  <form id="form" autocomplete="off">
+    <label for="q" hidden>Your guess</label>
+    <input id="q" placeholder="Type a country" role="combobox" aria-expanded="false" aria-controls="suggest" aria-autocomplete="list" enterkeyhint="go">
+    <button class="btn" id="go" type="submit">Guess</button>
+    <ul class="suggest" id="suggest" role="listbox" hidden></ul>
+  </form>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<div class="scrim" id="help" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="help-h">
+    <button class="ib x" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    <h2 id="help-h">How to play</h2>
+    <p>Each day you see what one country is searching for on Google right now. Work out which country it is in 6 guesses.</p>
+    <ol>
+      <li>Clues are translated to English. The country's own name and places show as <span class="redact">city</span> or <span class="redact">country</span>.</li>
+      <li>Every wrong guess shows how far off you are and unlocks more: more searches, then its top songs, then a local headline.</li>
+    </ol>
+    <div class="ex">
+      <div class="guess"><div class="gtop"><span class="gname">Kenya</span><span class="gkm">3,753 km away<b>↙</b></span></div><div class="gbar"><i style="width:81%;background:var(--warm)"></i></div></div>
+    </div>
+    <p>The longer and warmer the bar, the closer you are. The arrow points toward the answer.</p>
+    <p style="color:var(--muted);font-size:14px">A new country every day. Extra rounds from the shuffle button don't affect your streak.</p>
+  </div>
+</div>
+
+<div class="scrim" id="stats" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="stats-h">
+    <button class="ib x" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    <h2 id="stats-h">Your history</h2>
+    <div id="stats-body"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script>
+(() => {
+  const SHARE_URL = "https://ygebregz.github.io/trends-guessr/";
+  const MAX = 6;
+  const LEVELS = [[3, 0, 0], [5, 0, 0], [7, 0, 0], [10, 0, 0], [10, 5, 0], [10, 10, 1]]; // [searches, songs, headline] after N misses
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const fmt = (s) => esc(s).replace(/\{(country|nationality|city|region)\}/g, (_, k) => `<span class="redact">${k}</span>`);
+  const img = (src) => (src ? `<img src="${src}" alt="" loading="lazy">` : "");
+
+  let all = [], byCode = {}, byIso = {}, pathFor = {}, playable = [], dayKey = "", puzzleNo = 1, fetchedAt = 0;
+  let mode = "daily", target = null, guesses = [], done = false, picked = null, prevMiss = 0;
+
+  // ---------- geography
+  const rad = (d) => d * Math.PI / 180;
+  function km(a, b) {
+    const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lon - a.lon) / 2) ** 2;
+    return Math.round(2 * 6371 * Math.asin(Math.sqrt(h)));
+  }
+  function arrow(a, b) {
+    const y = Math.sin(rad(b.lon - a.lon)) * Math.cos(rad(b.lat));
+    const x = Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) - Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(rad(b.lon - a.lon));
+    return ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"][Math.round(((Math.atan2(y, x) * 180 / Math.PI + 360) % 360) / 45) % 8];
+  }
+  const heat = (d) => d === 0 ? "var(--found)" : d < 2000 ? "var(--hot)" : d < 5000 ? "var(--warm)" : "var(--cold)";
+  const closeness = (d) => Math.max(4, Math.round((1 - d / 20000) * 100));
+  const dist = (code) => (code === target.code ? 0 : km(byCode[code], target));
+  function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function toast(msg, ms = 1900) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), ms); }
+
+  // ---------- clue feed
+  const ago = (h) => (h == null ? "" : h < 1 ? "trending now" : `trending for ${h}h`);
+  function renderClues() {
+    const miss = guesses.filter((g) => g !== target.code).length;
+    const [nT, nS, nH] = done ? [10, 10, 1] : LEVELS[Math.min(miss, 5)];
+    const [pT, pS, pH] = LEVELS[Math.min(prevMiss, 5)];
+    const isFresh = (i, prev) => !done && miss > prevMiss && i >= prev;
+    const T = target.trends, S = target.songs, H = target.headline;
+    const sub = (t) => [
+      t.hint && fmt(t.hint),
+      t.hours != null && `<span class="live"></span>${ago(t.hours)}`,
+      t.traffic && `${esc(t.traffic)} searches`,
+      t.shared && `also trending in ${t.shared} other ${t.shared === 1 ? "country" : "countries"}`,
+    ].filter(Boolean).join(", ");
+
+    let h = `<h3 class="sect">Trending searches<span>${Math.min(nT, T.length)} of ${T.length}</span></h3><ol class="list">`;
+    T.slice(0, nT).forEach((t, i) => {
+      h += `<li class="item ${isFresh(i, pT) ? "fresh" : ""}"><span class="num">${i + 1}</span><span class="t">${fmt(t.t)}</span><span class="sub">${sub(t)}</span></li>`;
+    });
+    if (nT < T.length) {
+      const next = LEVELS[Math.min(miss + 1, 5)][0] - nT;
+      h += `<li class="item lock"><span class="num"></span><span class="sub">${T.length - nT} more hidden. A wrong guess shows ${next > 1 ? `the next ${next}` : "the next one"}.</span></li>`;
+    }
+    h += `</ol>`;
+
+    if (S.length) {
+      const shown = done ? S.length : Math.min(nS, S.length);
+      h += `<h3 class="sect">Top songs<span>${shown ? `${shown} of ${S.length}` : "unlocks after 4 guesses"}</span></h3><ol class="list">`;
+      S.slice(0, shown).forEach((s, i) => {
+        h += `<li class="item song ${isFresh(i, pS) ? "fresh" : ""}"><span class="num">${i + 1}</span><span class="cover">${img(s.art)}</span><span class="txt"><span class="t">${fmt(s.t)}</span><span class="sub">${fmt(s.a)}</span></span></li>`;
+      });
+      h += `</ol>`;
+      if (shown < S.length) {
+        h += `<div class="teaser">${S.slice(shown, shown + 5).map((s) => `<span class="cover">${img(s.art)}</span>`).join("")}<span class="msg">${shown ? `${S.length - shown} more after your 5th guess` : "This country's top 10 on Apple Music"}</span></div>`;
+      }
+    }
+
+    if (H) {
+      const meta = [H.source && esc(H.source), H.hours != null && (H.hours < 1 ? "just now" : `${H.hours}h ago`)].filter(Boolean).join(", ");
+      h += `<h3 class="sect">In the news<span>${nH ? "" : "unlocks on your last guess"}</span></h3>`;
+      h += nH
+        ? `<div class="news ${!done && miss > prevMiss && !pH ? "fresh" : ""}"><div><div class="src">${meta}</div><div class="h">${fmt(H.text)}</div></div><div class="ph">${img(H.img)}</div></div>`
+        : `<div class="news lock"><div><div class="src">A story people there are reading</div><span class="bar"></span><span class="bar"></span><span class="bar short"></span></div><div class="ph">${img(H.img)}</div></div>`;
+    }
+    $("clues").innerHTML = h;
+    prevMiss = miss;
+  }
+
+  // ---------- guesses
+  function renderGuesses(animateLast) {
+    $("guess-wrap").hidden = !guesses.length;
+    $("guess-h").innerHTML = `Your guesses<span>${guesses.length} of ${MAX}</span>`;
+    $("guesses").innerHTML = guesses.map((code, i) => {
+      const c = byCode[code], d = dist(code);
+      const right = d ? `${d.toLocaleString()} km away<b>${arrow(c, target)}</b>` : `<b style="color:var(--found);margin:0">Found it</b>`;
+      return `<li class="guess ${animateLast && i === guesses.length - 1 ? "new" : ""}"><div class="gtop"><span class="gname">${esc(c.name)}</span><span class="gkm">${right}</span></div><div class="gbar"><i style="width:${d ? closeness(d) : 100}%;background:${heat(d)}"></i></div></li>`;
+    }).join("");
+    $("q").placeholder = `Guess ${guesses.length + 1} of ${MAX}: type a country`;
+  }
+
+  // ---------- map
+  function drawMap(topo) {
+    const land = topojson.feature(topo, topo.objects.countries).features.filter((f) => f.properties.name !== "Antarctica");
+    const proj = d3.geoEqualEarth().fitExtent([[4, 4], [956, 466]], { type: "FeatureCollection", features: land });
+    d3.select("#map").selectAll("path").data(land).join("path")
+      .attr("d", d3.geoPath(proj))
+      .attr("class", (f) => (byIso[f.id] ? "play" : ""))
+      .each(function (f) { if (byIso[f.id]) pathFor[byIso[f.id].code] = this; })
+      .on("click", (ev, f) => {
+        if (done) return;
+        const c = byIso[f.id];
+        if (!c) return toast(`${f.properties.name} isn't one of the 42 countries`);
+        if (guesses.includes(c.code)) return toast(`You already guessed ${c.name}`);
+        pick(c.code);
+      });
+  }
+  function paintMap() {
+    for (const el of Object.values(pathFor)) { el.classList.remove("pick", "answer"); el.style.fill = ""; }
+    guesses.forEach((code) => { if (code !== target.code && pathFor[code]) pathFor[code].style.fill = heat(dist(code)); });
+    if (done && pathFor[target.code]) pathFor[target.code].classList.add("answer");
+    if (picked && pathFor[picked]) { pathFor[picked].classList.add("pick"); pathFor[picked].parentNode.appendChild(pathFor[picked]); }
+    $("mapcap").textContent = done ? target.name : picked ? byCode[picked].name : "Tap a dark gray country to pick it";
+  }
+
+  // ---------- history (daily results by date)
+  const getHist = () => store.get("tg-hist") || {};
+  function record(won) {
+    const h = getHist();
+    if (h[dayKey] != null) return;
+    h[dayKey] = won ? guesses.length : 0;
+    store.set("tg-hist", h);
+  }
+  const shiftDay = (key, n) => new Date(Date.parse(key + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+  function summary() {
+    const h = getHist(), days = Object.keys(h);
+    const won = days.filter((d) => h[d] > 0);
+    let streak = 0, d = h[dayKey] != null ? dayKey : shiftDay(dayKey, -1);
+    while (h[d] > 0) { streak++; d = shiftDay(d, -1); }
+    const avg = won.length ? String(Math.round((won.reduce((s, k) => s + h[k], 0) / won.length) * 10) / 10) : null;
+    return { played: days.length, won: won.length, streak, avg, h };
+  }
+  function weekHTML() {
+    const { h } = summary();
+    return `<div class="week">${Array.from({ length: 7 }, (_, i) => {
+      const key = shiftDay(dayKey, i - 6), v = h[key];
+      const day = new Date(key + "T12:00:00Z").toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" });
+      return `<div>${day}<b class="${v > 0 ? "won" : v === 0 ? "lost" : ""} ${key === dayKey ? "today" : ""}">${v > 0 ? v : v === 0 ? "×" : ""}</b></div>`;
+    }).join("")}</div>`;
+  }
+  function historyLine() {
+    const s = summary();
+    if (!s.played) return "Solve today's country to start a streak.";
+    return `${s.streak ? `${s.streak}-day streak. ` : ""}${s.won} of ${s.played} solved${s.avg ? `, ${s.avg} ${s.avg === "1" ? "guess" : "guesses"} on average` : ""}.`;
+  }
+  function untilMidnightUTC() {
+    const now = new Date(), s = Math.max(0, Math.floor((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now) / 1000));
+    return `${Math.floor(s / 3600)}h ${Math.floor(s / 60) % 60}m`;
+  }
+  $("b-stats").onclick = () => {
+    $("stats-body").innerHTML = `<p>${historyLine()}</p>${weekHTML()}<p style="color:var(--muted);font-size:14px;margin-top:14px">Numbers are guesses used. × means missed. A new country unlocks in ${untilMidnightUTC()}.</p>`;
+    $("stats").hidden = false;
+  };
+
+  // ---------- answer recap
+  function trailSVG() {
+    const ds = guesses.map(dist), n = ds.length;
+    const W = 320, H = 96, top = 20, bottom = 70, maxD = Math.max(...ds, 1);
+    const x = (i) => (n === 1 ? W / 2 : 14 + (i * (W - 28)) / (n - 1));
+    const y = (d) => top + (1 - d / maxD) * (bottom - top);
+    const pts = ds.map((d, i) => `${x(i).toFixed(1)},${y(d).toFixed(1)}`).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Distance after each guess">
+      <polyline class="ln" points="${pts}"/>
+      ${ds.map((d, i) => `<circle cx="${x(i)}" cy="${y(d)}" r="${d ? 5 : 7}" fill="${heat(d)}"/>
+        <text x="${x(i)}" y="${y(d) - 11}" text-anchor="middle">${d ? `${(d / 1000).toFixed(d < 10000 ? 1 : 0)}k` : "found"}</text>
+        <text x="${x(i)}" y="${H - 4}" text-anchor="middle">${esc(byCode[guesses[i]].code)}</text>`).join("")}
+    </svg>`;
+  }
+  function shareText() {
+    const won = guesses.includes(target.code);
+    const trail = guesses.map((c) => { const d = dist(c); return d ? `${d.toLocaleString()}` : "📍"; }).join(" → ");
+    return `Trends Guessr ${mode === "daily" ? `#${puzzleNo}` : "(extra round)"}: ${won ? `found it in ${guesses.length}` : "missed it"}\n${trail}${won ? "" : " km"}\n${SHARE_URL}`;
+  }
+  function renderReveal() {
+    const box = $("reveal");
+    $("ask").hidden = done;
+    if (!done) { box.hidden = true; return; }
+    const won = guesses.includes(target.code);
+    const covers = target.songs.slice(0, 5).map((s) => `<span>${img(s.art)}</span>`).join("");
+    const photo = target.headline && target.headline.img ? `<span>${img(target.headline.img)}</span>` : "";
+    box.innerHTML = `
+      <p class="kicker">${mode === "daily" ? `No. ${puzzleNo}, ${new Date(dayKey + "T12:00:00Z").toLocaleDateString(undefined, { month: "long", day: "numeric", timeZone: "UTC" })}` : "Extra round"}</p>
+      <h2>${esc(target.name)}</h2>
+      <p class="verdict">${won ? `You found it in ${guesses.length} ${guesses.length === 1 ? "guess" : "guesses"}.` : `Not this time. You were ${dist(guesses[guesses.length - 1]).toLocaleString()} km away on your last guess.`}</p>
+      ${covers || photo ? `<div class="strip">${covers}${photo}</div><p class="strip-cap">What ${esc(target.name)} was playing and reading today. Every clue is unlocked below.</p>` : ""}
+      <div class="trail">${trailSVG()}</div>
+      <p class="trail-cap">How close each guess was, in km.</p>
+      <div class="actions">
+        <button class="btn" id="share">Copy result</button>
+        <button class="btn plain" id="again">Play another country</button>
+      </div>
+      <textarea class="copy" id="copybox" rows="3" readonly hidden></textarea>
+      ${mode === "daily" ? `<div class="history"><p>${historyLine()} Next country in ${untilMidnightUTC()}.</p>${weekHTML()}</div>` : ""}
+      <!-- AD SLOT: 300x250 medium rectangle under the answer. -->
+      <div class="ad ad-rect" data-ad-slot="results-rect" aria-label="Advertisement">Advertisement</div>`;
+    box.hidden = false;
+    $("share").onclick = async () => {
+      const text = shareText();
+      try { await navigator.clipboard.writeText(text); toast("Copied. Paste it anywhere."); }
+      catch { const ta = $("copybox"); ta.value = text; ta.hidden = false; ta.select(); }
+    };
+    $("again").onclick = () => startPractice();
+  }
+
+  // ---------- render
+  function render(animate) {
+    renderReveal(); renderGuesses(animate); renderClues(); paintMap();
+    $("dock").hidden = done;
+    const upd = Math.max(0, Math.round((Date.now() - fetchedAt) / 36e5));
+    const fresh = `<span class="live"></span>searches from ${upd < 1 ? "the last hour" : upd < 48 ? `${upd}h ago` : `${Math.round(upd / 24)} days ago`}`;
+    $("dateline").innerHTML = mode === "daily"
+      ? `No. ${puzzleNo}, ${new Date(dayKey + "T12:00:00Z").toLocaleDateString(undefined, { month: "long", day: "numeric", timeZone: "UTC" })}. ${fresh}`
+      : `Extra round. ${fresh}`;
+  }
+
+  // ---------- input
+  const input = $("q"), list = $("suggest");
+  let opts = [], active = -1;
+  const norm = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  function closeList() { list.hidden = true; input.setAttribute("aria-expanded", "false"); }
+  function pick(code) { picked = code; input.value = byCode[code].name; closeList(); paintMap(); }
+  function suggest() {
+    const q = norm(input.value);
+    const ok = (c) => !guesses.includes(c.code) && (norm(c.name).split(/\s+/).some((w) => w.startsWith(q)) || (q.length > 2 && norm(c.name).includes(q)));
+    opts = q ? all.filter(ok).slice(0, 6) : [];
+    active = opts.length ? 0 : -1;
+    list.innerHTML = opts.map((c, i) => `<li role="option" aria-selected="${i === active}" data-code="${c.code}">${esc(c.name)}</li>`).join("");
+    list.hidden = !opts.length; input.setAttribute("aria-expanded", String(!!opts.length));
+  }
+  input.addEventListener("input", () => {
+    const exact = all.find((c) => norm(c.name) === norm(input.value));
+    picked = exact && !guesses.includes(exact.code) ? exact.code : null;
+    suggest(); paintMap();
+  });
+  input.addEventListener("keydown", (e) => {
+    if (list.hidden) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault(); active = (active + (e.key === "ArrowDown" ? 1 : -1) + opts.length) % opts.length;
+      [...list.children].forEach((li, i) => li.setAttribute("aria-selected", String(i === active)));
+    } else if (e.key === "Escape") closeList();
+  });
+  list.addEventListener("pointerdown", (e) => { const li = e.target.closest("li"); if (li) { e.preventDefault(); pick(li.dataset.code); } });
+  $("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (done) return;
+    if (!list.hidden && opts[active]) picked = opts[active].code;
+    if (!picked) {
+      input.classList.remove("shake"); void input.offsetWidth; input.classList.add("shake");
+      return toast(input.value.trim() ? "That country isn't in play" : "Type a country or tap the map");
+    }
+    guess(picked);
+  });
+  function guess(code) {
+    if (done || guesses.includes(code)) return;
+    guesses.push(code); picked = null; input.value = ""; closeList();
+    const won = code === target.code;
+    if (won || guesses.length >= MAX) { done = true; if (mode === "daily") record(won); }
+    if (mode === "daily") store.set("tg-day3", { dayKey, guesses, done });
+    render(true);
+    if (done) window.scrollTo({ top: 0, behavior: "smooth" });
+    else toast(guesses.length < 4 ? "Not it. 2 more searches unlocked." : guesses.length === 4 ? "Not it. Top songs unlocked." : guesses.length === 5 ? "Not it. More songs and a headline unlocked." : "Not it.");
+  }
+
+  // ---------- modes
+  const cache = {};
+  const loadCountry = (code) => (cache[code] ||= fetch(`c/${code}.json`).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }));
+  async function setTarget(code) { target = Object.assign({}, byCode[code], await loadCountry(code)); }
+  async function startDaily() {
+    mode = "daily";
+    const pool = [...playable].sort((a, b) => a.code.localeCompare(b.code));
+    await setTarget(pool[hash(dayKey) % pool.length].code);
+    const saved = store.get("tg-day3");
+    ({ guesses, done } = saved && saved.dayKey === dayKey ? saved : { guesses: [], done: false });
+    picked = null; prevMiss = guesses.filter((g) => g !== target.code).length; render(false);
+  }
+  async function startPractice() {
+    mode = "practice";
+    const pool = playable.filter((c) => !target || c.code !== target.code);
+    await setTarget(pool[Math.floor(Math.random() * pool.length)].code);
+    guesses = []; done = false; picked = null; prevMiss = 0; input.value = "";
+    render(false); window.scrollTo({ top: 0, behavior: "smooth" });
+    toast("Extra round. It won't affect your streak.");
+  }
+  $("b-practice").onclick = () => startPractice();
+  $("b-help").onclick = () => ($("help").hidden = false);
+  document.querySelectorAll(".scrim").forEach((m) => m.addEventListener("click", (e) => { if (e.target === m || e.target.closest("[data-close]")) m.hidden = true; }));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll(".scrim").forEach((m) => (m.hidden = true)); });
+
+  // ---------- boot
+  Promise.all([fetch("data.json").then((r) => r.json()), fetch("assets/countries-110m.json").then((r) => r.json())])
+    .then(async ([d, topo]) => {
+      all = [...d.all].sort((a, b) => a.name.localeCompare(b.name));
+      all.forEach((c) => (byCode[c.code] = c));
+      playable = d.playable.map((code) => byCode[code]);
+      playable.forEach((c) => (byIso[c.iso] = c));
+      dayKey = d.generated.slice(0, 10);
+      fetchedAt = Date.parse(d.generated);
+      puzzleNo = Math.max(1, Math.round((Date.parse(dayKey) - Date.parse("2026-11-24")) / 864e5) + 1);
+      drawMap(topo);
+      await startDaily();
+      if (!store.get("tg-seen-help")) { $("help").hidden = false; store.set("tg-seen-help", 1); }
+    })
+    .catch(() => { $("clues").innerHTML = `<p class="note">Today's puzzle didn't load. Reload the page to try again.</p>`; });
+})();
+</script>
+
+</body>
+</html>
