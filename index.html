@@ -74,7 +74,7 @@ header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9; backg
 .ad-top { width: 320px; max-width: 100%; height: 50px; margin-top: 12px; }
 .ad-rect { width: 300px; max-width: 100%; height: 250px; margin-top: 18px; }
 
-main { max-width: 520px; margin: 0 auto; padding-top: 16px; padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+main { max-width: 520px; margin: 0 auto; padding-top: 16px; padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
 .dateline { color: var(--muted); font-size: 13px; margin: 0; }
 .prompt { font-size: 24px; line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 4px; text-wrap: balance; }
 .lede { color: var(--muted); font-size: 14px; margin: 0 0 6px; }
@@ -176,10 +176,18 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
 .suggest { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 -8px 24px rgb(0 0 0 / .1); list-style: none; margin: 0; padding: 4px; max-height: 50vh; overflow-y: auto; }
 .suggest li { padding: 10px 12px; border-radius: 7px; font-weight: 600; cursor: pointer; }
 .suggest li[aria-selected="true"] { background: var(--soft); }
+.last { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; align-items: baseline; width: 100%; max-width: 520px; margin: 0 auto 9px; text-align: left; font-size: 14px; }
+.last .ln { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.last .ln small { font-weight: 400; color: var(--muted); font-size: 13px; }
+.last .km { color: var(--muted); white-space: nowrap; }
+.last .km b { color: var(--ink); margin-left: 3px; }
+.last .bar { grid-column: 1 / -1; height: 5px; background: var(--soft); border-radius: 3px; overflow: hidden; }
+.last .bar i { display: block; height: 100%; border-radius: 3px; animation: grow .7s cubic-bezier(.2,.8,.2,1); transform-origin: left; }
+#clues .item, #clues .news, #clues .teaser, #clues .sect, #guess-wrap { scroll-margin-top: calc(66px + env(safe-area-inset-top, 0px)); }
 .shake { animation: shake .35s; }
 @keyframes shake { 25%, 75% { transform: translateX(-4px); } 50% { transform: translateX(4px); } }
 
-.toast { position: fixed; top: calc(66px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 40; background: var(--ink); color: var(--bg); font-weight: 600; font-size: 14px; padding: 10px 14px; border-radius: 8px; max-width: calc(100% - 32px); text-align: center; }
+.toast { position: fixed; bottom: calc(132px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 40; background: var(--ink); color: var(--bg); font-weight: 600; font-size: 14px; padding: 10px 14px; border-radius: 8px; max-width: calc(100% - 32px); text-align: center; }
 
 /* sheets (help, history) */
 .scrim { position: fixed; inset: 0; z-index: 30; background: rgb(0 0 0 / .35); display: flex; align-items: flex-end; justify-content: center; }
@@ -235,6 +243,7 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
 </div>
 
 <div class="dock gutter" id="dock">
+  <button class="last" id="last" type="button" hidden aria-label="Show your guesses"></button>
   <form id="form" autocomplete="off">
     <label for="q" hidden>Your guess</label>
     <input id="q" placeholder="Type a country" role="combobox" aria-expanded="false" aria-controls="suggest" aria-autocomplete="list" enterkeyhint="go">
@@ -364,6 +373,12 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
       return `<li class="guess ${animateLast && i === guesses.length - 1 ? "new" : ""}"><div class="gtop"><span class="gname">${esc(c.name)}</span><span class="gkm">${right}</span></div><div class="gbar"><i style="width:${d ? closeness(d) : 100}%;background:${heat(d)}"></i></div></li>`;
     }).join("");
     $("q").placeholder = `Guess ${guesses.length + 1} of ${MAX}: type a country`;
+    const lastCode = guesses[guesses.length - 1];
+    if (lastCode && !done) {
+      const c = byCode[lastCode], d = dist(lastCode);
+      $("last").innerHTML = `<span class="ln">${esc(c.name)} <small>guess ${guesses.length} of ${MAX}</small></span><span class="km">${d.toLocaleString()} km away<b>${arrow(c, target)}</b></span><span class="bar"><i style="width:${closeness(d)}%;background:${heat(d)}"></i></span>`;
+      $("last").hidden = false;
+    } else $("last").hidden = true;
   }
 
   // ---------- map
@@ -535,7 +550,12 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
     if (mode === "daily") store.set("tg-day3", { dayKey, guesses, done });
     render(true);
     if (done) window.scrollTo({ top: 0, behavior: "smooth" });
-    else toast(guesses.length < 4 ? "Not it. 2 more searches unlocked." : guesses.length === 4 ? "Not it. Top songs unlocked." : guesses.length === 5 ? "Not it. More songs and a headline unlocked." : "Not it.");
+    else {
+      if (matchMedia("(pointer: coarse)").matches) input.blur();
+      const first = document.querySelector("#clues .fresh");
+      if (first) requestAnimationFrame(() => first.scrollIntoView({ behavior: "smooth", block: "start" }));
+      toast(guesses.length < 4 ? "New searches unlocked" : guesses.length === 4 ? "Top songs unlocked" : "More songs and a headline unlocked");
+    }
   }
 
   // ---------- modes
@@ -559,6 +579,7 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
     toast("Extra round. It won't affect your streak.");
   }
   $("b-practice").onclick = () => startPractice();
+  $("last").onclick = () => $("guess-wrap").scrollIntoView({ behavior: "smooth", block: "start" });
   $("b-help").onclick = () => ($("help").hidden = false);
   document.querySelectorAll(".scrim").forEach((m) => m.addEventListener("click", (e) => { if (e.target === m || e.target.closest("[data-close]")) m.hidden = true; }));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll(".scrim").forEach((m) => (m.hidden = true)); });
