@@ -76,7 +76,7 @@ header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9; backg
 
 main { max-width: 520px; margin: 0 auto; padding-top: 16px; padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
 .dateline { color: var(--muted); font-size: 13px; margin: 0; }
-.prompt { font-size: 24px; line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 4px; text-wrap: balance; }
+.prompt { font-size: 30px; line-height: 1.1; font-weight: 800; letter-spacing: -0.025em; margin: 2px 0 2px; text-wrap: balance; }
 .lede { color: var(--muted); font-size: 14px; margin: 0 0 6px; }
 .live { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--live); margin: 0 6px 0 1px; vertical-align: 1px; animation: pulse 2s ease-out infinite; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgb(229 72 77 / .45); } 100% { box-shadow: 0 0 0 7px rgb(229 72 77 / 0); } }
@@ -91,6 +91,8 @@ ol.list { list-style: none; margin: 0; padding: 0; }
 .item .num { color: var(--muted); font-size: 13px; padding-top: 3px; font-variant-numeric: tabular-nums; }
 .item .t { font-size: 17px; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
 .item .sub { grid-column: 2; color: var(--muted); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+.item .sub .hint { display: block; color: var(--ink); opacity: .72; font-size: 14px; }
+.item .sub .meta { display: block; font-size: 12px; margin-top: 2px; }
 .item.fresh { animation: fresh 1.6s ease-out; }
 @keyframes fresh { 0% { background: color-mix(in srgb, var(--warm) 22%, transparent); } 100% { background: transparent; } }
 .item.fresh .t { animation: type .8s steps(28, end); }
@@ -226,8 +228,7 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
     <section class="reveal" id="reveal" hidden></section>
     <div id="ask">
       <p class="dateline" id="dateline">&nbsp;</p>
-      <h1 class="prompt">Which country searched for all this today?</h1>
-      <p class="lede">Clues are translated to English and its place names are blacked out.</p>
+      <h1 class="prompt">Where is this trending?</h1>
     </div>
     <div id="guess-wrap" hidden>
       <h3 class="sect" id="guess-h">Your guesses</h3>
@@ -323,20 +324,21 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
     const [pT, pS, pH] = LEVELS[Math.min(prevMiss, 5)];
     const isFresh = (i, prev) => !done && miss > prevMiss && i >= prev;
     const T = target.trends, S = target.songs, H = target.headline;
-    const sub = (t) => [
-      t.hint && fmt(t.hint),
-      t.hours != null && `<span class="live"></span>${ago(t.hours)}`,
-      t.traffic && `${esc(t.traffic)} searches`,
-      t.shared && `also trending in ${t.shared} other ${t.shared === 1 ? "country" : "countries"}`,
-    ].filter(Boolean).join(", ");
+    const sub = (t) => {
+      const meta = [
+        t.hours != null && `<span class="live"></span>${t.hours < 1 ? "just now" : `${t.hours}h`}`,
+        t.traffic && `${esc(t.traffic)} searches`,
+        t.shared && `${t.shared} other ${t.shared === 1 ? "country" : "countries"}`,
+      ].filter(Boolean).join(" · ");
+      return (t.hint ? `<span class="hint">${fmt(t.hint)}</span>` : "") + `<span class="meta">${meta}</span>`;
+    };
 
     let h = `<h3 class="sect">Trending searches<span>${Math.min(nT, T.length)} of ${T.length}</span></h3><ol class="list">`;
     T.slice(0, nT).forEach((t, i) => {
       h += `<li class="item ${isFresh(i, pT) ? "fresh" : ""}"><span class="num">${i + 1}</span><span class="t">${fmt(t.t)}</span><span class="sub">${sub(t)}</span></li>`;
     });
     if (nT < T.length) {
-      const next = LEVELS[Math.min(miss + 1, 5)][0] - nT;
-      h += `<li class="item lock"><span class="num"></span><span class="sub">${T.length - nT} more hidden. A wrong guess shows ${next > 1 ? `the next ${next}` : "the next one"}.</span></li>`;
+      h += `<li class="item lock"><span class="num"></span><span class="sub">${T.length - nT} more unlock as you guess</span></li>`;
     }
     h += `</ol>`;
 
@@ -372,7 +374,7 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
       const right = d ? `${d.toLocaleString()} km away<b>${arrow(c, target)}</b>` : `<b style="color:var(--found);margin:0">Found it</b>`;
       return `<li class="guess ${animateLast && i === guesses.length - 1 ? "new" : ""}"><div class="gtop"><span class="gname">${esc(c.name)}</span><span class="gkm">${right}</span></div><div class="gbar"><i style="width:${d ? closeness(d) : 100}%;background:${heat(d)}"></i></div></li>`;
     }).join("");
-    $("q").placeholder = `Guess ${guesses.length + 1} of ${MAX}: type a country`;
+    $("q").placeholder = "Type a country";
     const lastCode = guesses[guesses.length - 1];
     if (lastCode && !done) {
       const c = byCode[lastCode], d = dist(lastCode);
@@ -498,11 +500,7 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
   function render(animate) {
     renderReveal(); renderGuesses(animate); renderClues(); paintMap();
     $("dock").hidden = done;
-    const upd = Math.max(0, Math.round((Date.now() - fetchedAt) / 36e5));
-    const fresh = `<span class="live"></span>searches from ${upd < 1 ? "the last hour" : upd < 48 ? `${upd}h ago` : `${Math.round(upd / 24)} days ago`}`;
-    $("dateline").innerHTML = mode === "daily"
-      ? `No. ${puzzleNo}, ${new Date(dayKey + "T12:00:00Z").toLocaleDateString(undefined, { month: "long", day: "numeric", timeZone: "UTC" })}. ${fresh}`
-      : `Extra round. ${fresh}`;
+    $("dateline").textContent = mode === "daily" ? `Daily #${puzzleNo}` : "Extra round";
   }
 
   // ---------- input
