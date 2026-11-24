@@ -192,7 +192,7 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
 .toast { position: fixed; bottom: calc(132px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 40; background: var(--ink); color: var(--bg); font-weight: 600; font-size: 14px; padding: 10px 14px; border-radius: 8px; max-width: calc(100% - 32px); text-align: center; }
 
 /* sheets (help, history) */
-.scrim { position: fixed; inset: 0; z-index: 30; background: rgb(0 0 0 / .35); display: flex; align-items: flex-end; justify-content: center; }
+.scrim { position: fixed; inset: 0; z-index: 30; background: rgb(0 0 0 / .6); display: flex; align-items: flex-end; justify-content: center; }
 .sheet { position: relative; width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; background: var(--bg); border-radius: 14px 14px 0 0; padding: 20px max(18px, env(safe-area-inset-right, 0px)) calc(22px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px)); }
 .sheet .x { position: absolute; top: 10px; right: 10px; }
 .sheet h2 { margin: 0 0 8px; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
@@ -259,16 +259,12 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="help-h">
     <button class="ib x" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     <h2 id="help-h">How to play</h2>
-    <p>Each day you see what one country is searching for on Google right now. Work out which country it is in 6 guesses.</p>
-    <ol>
-      <li>Clues are translated to English. The country's own name and places show as <span class="redact">city</span> or <span class="redact">country</span>.</li>
-      <li>Every wrong guess shows how far off you are and unlocks more: more searches, then its top songs, then a local headline.</li>
-    </ol>
+    <p>Guess the country from what it's searching right now. You get 6 tries.</p>
     <div class="ex">
       <div class="guess"><div class="gtop"><span class="gname">Kenya</span><span class="gkm">3,753 km away<b>↙</b></span></div><div class="gbar"><i style="width:81%;background:var(--warm)"></i></div></div>
     </div>
-    <p>The longer and warmer the bar, the closer you are. The arrow points toward the answer.</p>
-    <p style="color:var(--muted);font-size:14px">A new country every day. Extra rounds from the shuffle button don't affect your streak.</p>
+    <p style="color:var(--muted)">Each miss shows how close you are and unlocks more clues.</p>
+    <button class="btn" data-close style="width:100%;margin-top:6px">Play</button>
   </div>
 </div>
 
