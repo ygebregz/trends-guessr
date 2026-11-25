@@ -237,9 +237,9 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
     <section id="clues" aria-live="polite"></section>
     <div class="map" id="mapbox">
       <svg id="map" viewBox="0 0 960 470" role="img" aria-label="World map. Tap a country to pick it."></svg>
-      <span class="cap" id="mapcap">Tap a dark gray country to pick it</span>
+      <span class="cap" id="mapcap">Tap a country to pick it</span>
     </div>
-    <p class="note">Searches from Google Trends and songs from Apple Music. 42 countries are in play.</p>
+    <p class="note">Searches from Google Trends and songs from Apple Music.</p>
   </main>
 </div>
 
@@ -292,7 +292,7 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
   const fmt = (s) => esc(s).replace(/\{(country|nationality|city|region)\}/g, (_, k) => `<span class="redact">${k}</span>`);
   const img = (src) => (src ? `<img src="${src}" alt="" loading="lazy">` : "");
 
-  let all = [], byCode = {}, byIso = {}, pathFor = {}, playable = [], dayKey = "", puzzleNo = 1, fetchedAt = 0;
+  let all = [], byCode = {}, pathFor = {}, playable = [], dayKey = "", puzzleNo = 1, fetchedAt = 0;
   let mode = "daily", target = null, guesses = [], done = false, picked = null, prevMiss = 0;
 
   // ---------- geography
@@ -380,17 +380,54 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
   }
 
   // ---------- map
-  function drawMap(topo) {
-    const land = topojson.feature(topo, topo.objects.countries).features.filter((f) => f.properties.name !== "Antarctica");
-    const proj = d3.geoEqualEarth().fitExtent([[4, 4], [956, 466]], { type: "FeatureCollection", features: land });
+  // Every country on the map can be guessed; only the countries in data.json can be the answer.
+  const RENAME = {
+    "United States of America": "United States", "W. Sahara": "Western Sahara", "Dem. Rep. Congo": "DR Congo",
+    "Dominican Rep.": "Dominican Republic", "Falkland Is.": "Falkland Islands", "Fr. S. Antarctic Lands": "French Southern Lands",
+    "Central African Rep.": "Central African Republic", "Eq. Guinea": "Equatorial Guinea", "eSwatini": "Eswatini",
+    "Solomon Is.": "Solomon Islands", "N. Cyprus": "Northern Cyprus", "Bosnia and Herz.": "Bosnia and Herzegovina",
+    "Macedonia": "North Macedonia", "S. Sudan": "South Sudan",
+  };
+  const ALIAS = {
+    "United States": ["usa", "us", "america"], "United Kingdom": ["uk", "britain", "great britain", "england"],
+    "Türkiye": ["turkey"], "South Korea": ["korea"], "United Arab Emirates": ["uae", "emirates"], "Netherlands": ["holland"],
+    "Czechia": ["czech republic"], "Côte d'Ivoire": ["ivory coast"], "Myanmar": ["burma"], "Eswatini": ["swaziland"],
+    "DR Congo": ["democratic republic of the congo", "congo kinshasa"], "Timor-Leste": ["east timor"], "North Macedonia": ["macedonia"],
+  };
+  function center(f) {
+    let g = f.geometry;
+    if (g.type === "MultiPolygon") {
+      g = g.coordinates.map((c) => ({ type: "Polygon", coordinates: c })).reduce((a, b) => (d3.geoArea(b) > d3.geoArea(a) ? b : a));
+    }
+    const [lon, lat] = d3.geoCentroid(g);
+    return { lat, lon };
+  }
+  function buildCountries(dataAll, topo) {
+    const byIsoData = {};
+    dataAll.forEach((c) => (byIsoData[c.iso] = c));
+    const feats = topojson.feature(topo, topo.objects.countries).features.filter((f) => f.properties.name !== "Antarctica");
+    const list = feats.map((f) => {
+      const known = f.id && byIsoData[f.id];
+      const name = RENAME[f.properties.name] || f.properties.name;
+      const c = known ? { ...known } : { code: "X" + (f.id || norm(name).replace(/\W/g, "")), iso: f.id, name, ...center(f) };
+      c.feat = f;
+      return c;
+    });
+    dataAll.forEach((c) => { if (!list.some((x) => x.code === c.code)) list.push({ ...c }); });
+    list.forEach((c) => (c.keys = [norm(c.name), ...(ALIAS[c.name] || [])]));
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  const shortName = (c) => (c.code.length === 2 ? c.code : c.name.length <= 6 ? c.name : c.name.slice(0, 5) + ".");
+  function drawMap() {
+    const land = all.filter((c) => c.feat);
+    const proj = d3.geoEqualEarth().fitExtent([[4, 4], [956, 466]], { type: "FeatureCollection", features: land.map((c) => c.feat) });
+    const path = d3.geoPath(proj);
     d3.select("#map").selectAll("path").data(land).join("path")
-      .attr("d", d3.geoPath(proj))
-      .attr("class", (f) => (byIso[f.id] ? "play" : ""))
-      .each(function (f) { if (byIso[f.id]) pathFor[byIso[f.id].code] = this; })
-      .on("click", (ev, f) => {
+      .attr("d", (c) => path(c.feat))
+      .attr("class", "play")
+      .each(function (c) { pathFor[c.code] = this; })
+      .on("click", (ev, c) => {
         if (done) return;
-        const c = byIso[f.id];
-        if (!c) return toast(`${f.properties.name} isn't one of the 42 countries`);
         if (guesses.includes(c.code)) return toast(`You already guessed ${c.name}`);
         pick(c.code);
       });
@@ -400,7 +437,7 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
     guesses.forEach((code) => { if (code !== target.code && pathFor[code]) pathFor[code].style.fill = heat(dist(code)); });
     if (done && pathFor[target.code]) pathFor[target.code].classList.add("answer");
     if (picked && pathFor[picked]) { pathFor[picked].classList.add("pick"); pathFor[picked].parentNode.appendChild(pathFor[picked]); }
-    $("mapcap").textContent = done ? target.name : picked ? byCode[picked].name : "Tap a dark gray country to pick it";
+    $("mapcap").textContent = done ? target.name : picked ? byCode[picked].name : "Tap a country to pick it";
   }
 
   // ---------- history (daily results by date)
@@ -453,7 +490,7 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
       <polyline class="ln" points="${pts}"/>
       ${ds.map((d, i) => `<circle cx="${x(i)}" cy="${y(d)}" r="${d ? 5 : 7}" fill="${heat(d)}"/>
         <text x="${x(i)}" y="${y(d) - 11}" text-anchor="middle">${d ? `${(d / 1000).toFixed(d < 10000 ? 1 : 0)}k` : "found"}</text>
-        <text x="${x(i)}" y="${H - 4}" text-anchor="middle">${esc(byCode[guesses[i]].code)}</text>`).join("")}
+        <text x="${x(i)}" y="${H - 4}" text-anchor="middle">${esc(shortName(byCode[guesses[i]]))}</text>`).join("")}
     </svg>`;
   }
   function shareText() {
@@ -507,14 +544,14 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
   function pick(code) { picked = code; input.value = byCode[code].name; closeList(); paintMap(); }
   function suggest() {
     const q = norm(input.value);
-    const ok = (c) => !guesses.includes(c.code) && (norm(c.name).split(/\s+/).some((w) => w.startsWith(q)) || (q.length > 2 && norm(c.name).includes(q)));
+    const ok = (c) => !guesses.includes(c.code) && c.keys.some((k) => k.split(/\s+/).some((w) => w.startsWith(q)) || (q.length > 2 && k.includes(q)));
     opts = q ? all.filter(ok).slice(0, 6) : [];
     active = opts.length ? 0 : -1;
     list.innerHTML = opts.map((c, i) => `<li role="option" aria-selected="${i === active}" data-code="${c.code}">${esc(c.name)}</li>`).join("");
     list.hidden = !opts.length; input.setAttribute("aria-expanded", String(!!opts.length));
   }
   input.addEventListener("input", () => {
-    const exact = all.find((c) => norm(c.name) === norm(input.value));
+    const exact = all.find((c) => c.keys.includes(norm(input.value)));
     picked = exact && !guesses.includes(exact.code) ? exact.code : null;
     suggest(); paintMap();
   });
@@ -532,7 +569,7 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
     if (!list.hidden && opts[active]) picked = opts[active].code;
     if (!picked) {
       input.classList.remove("shake"); void input.offsetWidth; input.classList.add("shake");
-      return toast(input.value.trim() ? "That country isn't in play" : "Type a country or tap the map");
+      return toast(input.value.trim() ? "Pick a country from the list" : "Type a country or tap the map");
     }
     guess(picked);
   });
@@ -581,14 +618,13 @@ textarea.copy { width: 100%; margin-top: 10px; font: 13px ui-monospace, Menlo, m
   // ---------- boot
   Promise.all([fetch("data.json").then((r) => r.json()), fetch("assets/countries-110m.json").then((r) => r.json())])
     .then(async ([d, topo]) => {
-      all = [...d.all].sort((a, b) => a.name.localeCompare(b.name));
+      all = buildCountries(d.all, topo);
       all.forEach((c) => (byCode[c.code] = c));
       playable = d.playable.map((code) => byCode[code]);
-      playable.forEach((c) => (byIso[c.iso] = c));
       dayKey = d.generated.slice(0, 10);
       fetchedAt = Date.parse(d.generated);
       puzzleNo = Math.max(1, Math.round((Date.parse(dayKey) - Date.parse("2026-11-24")) / 864e5) + 1);
-      drawMap(topo);
+      drawMap();
       await startDaily();
       if (!store.get("tg-seen-help")) { $("help").hidden = false; store.set("tg-seen-help", 1); }
     })
